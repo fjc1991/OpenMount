@@ -148,6 +148,7 @@ struct BindingEditor: View {
             .disabled(key == .fn)
         }
         .onAppear(perform: loadFromCurrent)
+        .onChange(of: current) { loadFromCurrent() }
         .onDisappear(perform: stopCapture)
     }
 

@@ -27,6 +27,9 @@ final class DeviceController: ObservableObject {
     @Published private(set) var defaultBindings: [BindingLayer: [KeyID: KeyBinding]] = [:]
     @Published var macros: [Macro] = []
 
+    /// Called after a change was successfully written to the keyboard (used by the tip jar).
+    var onSuccess: (() -> Void)?
+
     private let queue = DispatchQueue(label: "OpenMount.device")
     private nonisolated(unsafe) var device: LightMountDevice?
     private var timer: Timer?
@@ -123,7 +126,11 @@ final class DeviceController: ObservableObject {
             guard let self, let dev = self.device else { return }
             do {
                 try work(dev)
-                Task { @MainActor in self.busy = false; done?() }
+                Task { @MainActor in
+                    self.busy = false
+                    done?()
+                    if label != "Reading keyboard" { self.onSuccess?() }
+                }
             } catch {
                 Task { @MainActor in self.busy = false; self.lastError = "\(label) failed: \(error)" }
             }

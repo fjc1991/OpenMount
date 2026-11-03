@@ -5,16 +5,27 @@ import OpenMountKit
 struct OpenMountApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var device = DeviceController()
+    @StateObject private var tips = TipJar()
 
     var body: some Scene {
         WindowGroup("OpenMount", id: "main") {
             ContentView()
                 .environmentObject(device)
+                .environmentObject(tips)
+                .onAppear { device.onSuccess = { [weak tips] in tips?.recordSuccess() } }
                 .frame(minWidth: 980, minHeight: 640)
                 .tint(.orange)
         }
         .windowToolbarStyle(.unified)
-        .commands { CommandGroup(replacing: .newItem) {} }
+        .commands {
+            CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .help) {
+                Button("OpenMount Help") { NSWorkspace.shared.open(URL(string: "https://github.com/fjc1991/OpenMount#readme")!) }
+                Button("Report a Problem…") { NSWorkspace.shared.open(URL(string: "https://github.com/fjc1991/OpenMount/issues/new/choose")!) }
+                Divider()
+                Button("Support OpenMount on Ko-fi…") { NSWorkspace.shared.open(TipJar.url) }
+            }
+        }
 
         MenuBarExtra {
             MenuBarView().environmentObject(device)
@@ -77,6 +88,8 @@ struct ContentView: View {
                                            description: Text(msg))
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .bottom) { TipNudge().padding(.horizontal, 20) }
             .navigationTitle(section?.rawValue ?? "OpenMount")
         }
         .overlay(alignment: .bottom) { ToastView() }

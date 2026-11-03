@@ -94,6 +94,11 @@ Tests/                  protocol tests built from bytes captured on real hardwar
 docs/PROTOCOL.md        protocol documentation
 ```
 
+## Support
+
+OpenMount is free and always will be. If it saves you from booting Windows just to change your
+keyboard lighting, you can [buy me a coffee on Ko-fi](https://ko-fi.com/fjc91). Thank you!
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Bug reports with `omctl info` output are especially

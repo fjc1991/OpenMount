@@ -192,6 +192,9 @@ struct DeviceView: View {
             Section("About") {
                 Text("OpenMount is an unofficial, open-source configurator. It isn't affiliated with or endorsed by be quiet!. It never updates firmware.")
                     .font(.footnote)
+                SupportLink()
+                Text("OpenMount is free. If it's useful to you, a tip helps keep it going.")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
