@@ -17,6 +17,7 @@ Thanks for helping. A few ground rules keep the project useful and legally clean
 swift test                  # unit tests (no keyboard needed)
 swift build && .build/debug/omctl -v info
 ./scripts/build-app.sh      # dist/OpenMount.app
+./scripts/make-icns.sh      # regenerate the icon after editing scripts/make-icon.swift
 ```
 
 `omctl -v` prints every frame sent and received, which is the quickest way to investigate the
@@ -27,4 +28,3 @@ keyboard.
 - Layout drawings for the Light Mount TKL and Dark Mount
 - The meaning of the optional 3 bytes at the end of a lighting layer config
 - Localised legends (DE/FR/UK)
-- An app icon

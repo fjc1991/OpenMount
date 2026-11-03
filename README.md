@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/icon.png" width="160" alt="OpenMount icon"></p>
+
 # OpenMount
 
 **A native macOS app for configuring the be quiet! Light Mount keyboard.**
