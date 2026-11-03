@@ -41,8 +41,8 @@ If you own one of the untested models, please open an issue with the output of `
 
 ## Install
 
-1. Download `OpenMount-vX.Y.Z.zip` from [Releases](../../releases) and unzip it.
-2. Move **OpenMount.app** to Applications.
+1. Download `OpenMount-vX.Y.Z.dmg` from [Releases](../../releases) and open it.
+2. Drag **OpenMount** onto the **Applications** shortcut. (A `.zip` is also attached if you prefer.)
 3. The app isn't notarised yet, so the first time you open it, right-click it, choose **Open**,
    then **Open** again. Or run `xattr -dr com.apple.quarantine /Applications/OpenMount.app`.
 
@@ -56,6 +56,7 @@ git clone https://github.com/fjc1991/OpenMount.git
 cd OpenMount
 swift test               # protocol unit tests
 ./scripts/build-app.sh   # builds dist/OpenMount.app
+./scripts/make-dmg.sh    # packages it as dist/OpenMount-vX.Y.Z.dmg
 ```
 
 The CLI:

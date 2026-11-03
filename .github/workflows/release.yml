@@ -11,9 +11,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build
         run: VERSION="${GITHUB_REF_NAME#v}" ./scripts/build-app.sh
+      - name: Disk image
+        run: VERSION="${GITHUB_REF_NAME#v}" ./scripts/make-dmg.sh
       - name: Zip
         run: cd dist && ditto -c -k --keepParent OpenMount.app "OpenMount-${GITHUB_REF_NAME}.zip"
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist/OpenMount-*.zip
+          files: |
+            dist/OpenMount-*.dmg
+            dist/OpenMount-*.zip
           generate_release_notes: true
