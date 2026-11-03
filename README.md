@@ -52,7 +52,7 @@ there's no Input Monitoring prompt: OpenMount only uses the keyboard's configura
 ## Build from source
 
 ```sh
-git clone https://github.com/<you>/OpenMount.git
+git clone https://github.com/fjc1991/OpenMount.git
 cd OpenMount
 swift test               # protocol unit tests
 ./scripts/build-app.sh   # builds dist/OpenMount.app
