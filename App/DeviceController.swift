@@ -228,6 +228,33 @@ final class DeviceController: ObservableObject {
         }
     }
 
+    // MARK: Windows-style Home / End
+
+    /// Home/End move to the start/end of the line (⌘← / ⌘→) instead of the top/bottom of the document.
+    static let lineHomeEndMap: [(KeyID, KeyBinding)] = [
+        (.home, .key(modifiers: .leftGui, usage: 0x50)),
+        (.end, .key(modifiers: .leftGui, usage: 0x4F)),
+    ]
+
+    var lineHomeEndEnabled: Bool {
+        Self.lineHomeEndMap.allSatisfy { bindings[.base]?[$0.0] == $0.1 }
+    }
+
+    func setLineHomeEnd(_ on: Bool) {
+        let map = Self.lineHomeEndMap
+        var fresh: [KeyID: KeyBinding] = [:]
+        perform("Home / End", { dev in
+            for (key, b) in map {
+                if on { try dev.setBinding(b, for: key, layer: .base) } else { try dev.resetBinding(key, layer: .base) }
+                fresh[key] = try dev.binding(key, layer: .base)
+            }
+        }) {
+            for (k, b) in fresh { self.bindings[.base, default: [:]][k] = b }
+            self.refreshCustomKeys()
+            self.toast = on ? "Home / End now jump to the start / end of the line" : "Home / End back to the macOS default"
+        }
+    }
+
     // MARK: Language switch key
 
     enum LanguageKey: String, CaseIterable, Identifiable {

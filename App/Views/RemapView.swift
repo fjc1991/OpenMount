@@ -36,6 +36,14 @@ struct RemapView: View {
                 Spacer()
             }
             .help("Sends ⌃Space, which macOS uses to switch between input sources such as English and Korean.")
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.left.to.line").foregroundStyle(.secondary)
+                Toggle("Home / End go to the start / end of the line, like on Windows",
+                       isOn: Binding(get: { device.lineHomeEndEnabled }, set: { device.setLineHomeEnd($0) }))
+                    .toggleStyle(.switch)
+                Spacer()
+            }
+            .help("Home sends ⌘← and End sends ⌘→. Shift+Home/End selects to the start/end of the line. On a web page with no text box selected, Home acts as Back.")
             if device.languageKey == .fn {
                 Text("Fn now switches language (⌃Space). The Fn layer (Fn + arrows for lighting, Fn + Pause for game mode) has moved to Right Ctrl.")
                     .font(.footnote).foregroundStyle(.secondary)
@@ -83,6 +91,8 @@ struct RemapView: View {
         guard let b else { return nil }
         switch b {
         case .key(let m, let u) where m == .leftCtrl && u == 0x2C: return "🌐"
+        case .key(let m, let u) where m == .leftGui && u == 0x50: return "⇤"
+        case .key(let m, let u) where m == .leftGui && u == 0x4F: return "⇥"
         case .key(let m, let u): return m.symbols + (u == 0 ? "" : HIDUsage.name(u))
         case .media: return "♫"
         case .mouse: return "🖱"

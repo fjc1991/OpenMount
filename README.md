@@ -23,6 +23,8 @@ itself, so it keeps working on any computer.
 - **Language switch key:** make Fn (or Right Ctrl or Caps Lock) switch input languages, for
   example English ↔ Korean, without the app running. When Fn is used, the Fn layer moves to Right
   Ctrl so nothing is lost.
+- **Windows-style Home / End:** one switch makes Home and End jump to the start and end of the
+  line (⌘← / ⌘→), with Shift+Home/End selecting, instead of the top and bottom of the document.
 - **Mac modifier layout:** one switch swaps Win and Alt, so the keys next to the space bar are
   ⌘ Command and ⌥ Option, like on a Mac keyboard.
 - **Language layouts:** see Korean (or another language) on screen when your keycaps only

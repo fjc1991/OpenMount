@@ -215,6 +215,8 @@ public enum KeyBinding: Equatable, Hashable, Codable, Sendable {
         case .disabled: return "Disabled"
         case .fnLayer: return "Fn layer"
         case .key(let m, let u) where m == .leftCtrl && u == 0x2C: return "Switch language (⌃Space)"
+        case .key(let m, let u) where m == .leftGui && u == 0x50: return "Start of line (⌘←)"
+        case .key(let m, let u) where m == .leftGui && u == 0x4F: return "End of line (⌘→)"
         case .key(let m, let u):
             let name = HIDUsage.name(u)
             if u == 0 { return m.symbols.isEmpty ? "None" : m.symbols }
