@@ -61,6 +61,8 @@ final class ProtocolTests: XCTestCase {
             (hex("0207"), .media(.playPause)),
             (hex("0902"), .lighting(.nextEffect)),
             (hex("0a0100"), .macro(1)),
+            (hex("1b"), .fnLayer),                       // factory Fn key, read from hardware
+            (hex("01012c"), .languageSwitch),            // ⌃Space, verified switching EN/KO on macOS
         ]
         for (bytes, b) in cases {
             XCTAssertEqual(KeyBinding.decode(bytes), b)
@@ -95,5 +97,28 @@ final class ProtocolTests: XCTestCase {
             let ids = KeyboardLayout.lightMount(p).keys.map(\.id)
             XCTAssertEqual(Set(ids).count, ids.count, "duplicate keys in \(p)")
         }
+    }
+
+    /// Validates every community layout in Layouts/ (this is the check contributors' PRs must pass).
+    func testCommunityLayouts() throws {
+        let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../Layouts").standardized
+        let (layouts, problems) = LayoutLibrary.load(from: dir)
+        XCTAssert(problems.isEmpty, "Layout problems:\n" + problems.map(\.description).joined(separator: "\n"))
+        XCTAssertTrue(layouts.contains { $0.id == "ko-2set" })
+        let template = try JSONDecoder().decode(LanguageLayout.self, from: Data(contentsOf: dir.appendingPathComponent("TEMPLATE.json")))
+        XCTAssertEqual(LayoutLibrary.validate(template, fileName: "xx-name.json").count, 0, "the template itself should be valid")
+    }
+
+    func testLayoutValidatorCatchesMistakes() {
+        let bad = LanguageLayout(id: "Korean", name: "", language: "korean", authors: [], macInputSources: [],
+                                 physicalLayout: .ansi, keys: ["Qq": .init(base: ""), "A": .init(base: "a", shift: "a")])
+        let problems = LayoutLibrary.validate(bad, fileName: "x.json").map(\.message)
+        XCTAssertGreaterThanOrEqual(problems.count, 6)
+    }
+
+    func testHIDUsageMapping() {
+        XCTAssertEqual(KeyID.q.hidUsage, 0x14)
+        XCTAssertEqual(KeyID.fromHIDUsage(0x04), .a)
+        XCTAssertEqual(KeyID.fromHIDUsage(0xE3), .leftGui)
     }
 }

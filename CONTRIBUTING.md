@@ -25,6 +25,8 @@ keyboard.
 
 ## Wanted
 
+- **Language layouts.** Adding one takes about 15 minutes; see [Layouts/README.md](Layouts/README.md).
+
 - Layout drawings for the Light Mount TKL and Dark Mount
 - The meaning of the optional 3 bytes at the end of a lighting layer config
 - Localised legends (DE/FR/UK)

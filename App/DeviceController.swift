@@ -26,6 +26,8 @@ final class DeviceController: ObservableObject {
     @Published private(set) var bindings: [BindingLayer: [KeyID: KeyBinding]] = [:]
     @Published private(set) var defaultBindings: [BindingLayer: [KeyID: KeyBinding]] = [:]
     @Published var macros: [Macro] = []
+    /// Raw key ids the keyboard reports as customised (authoritative for "remapped" highlighting).
+    @Published private(set) var customKeys: Set<UInt16> = []
 
     /// Called after a change was successfully written to the keyboard (used by the tip jar).
     var onSuccess: (() -> Void)?
@@ -39,7 +41,8 @@ final class DeviceController: ObservableObject {
         perKeyColors = Self.load("perKey") ?? [:]
         perKeyActive = UserDefaults.standard.bool(forKey: "perKeyActive")
         physicalLayout = PhysicalLayout(rawValue: UserDefaults.standard.string(forKey: "layout") ?? "") ?? .ansi
-        defaultBindings = Self.load("defaultBindings") ?? [:]
+        let storedDefaults: [BindingLayer: [KeyID: KeyBinding]] = Self.load("defaultBindings") ?? [:]
+        defaultBindings = storedDefaults.mapValues { $0.mapValues { KeyBinding.decode($0.encode()) } }
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
@@ -78,7 +81,7 @@ final class DeviceController: ObservableObject {
                 let b = (try? dev.allBindings(layer: .base)) ?? [:]
                 let fn = (try? dev.allBindings(layer: .fn)) ?? [:]
                 let m = (try? dev.macros()) ?? []
-                let customKeys = Set(((try? dev.customBindings()) ?? []).map { $0.0 })
+                let customKeys = (try? dev.customBindings()).map { Set($0.map { $0.0 }) }
                 Task { @MainActor in
                     self.connecting = false
                     self.deviceName = dev.match.name
@@ -87,7 +90,7 @@ final class DeviceController: ObservableObject {
                     self.pollingRate = rate
                     self.bindings = [.base: b, .fn: fn]
                     self.macros = m
-                    self.rememberDefaults(customKeys: customKeys)
+                    if let ck = customKeys { self.rememberDefaults(customKeys: ck) }
                     self.state = .connected
                     if self.perKeyActive { self.applyPerKey() }
                 }
@@ -101,12 +104,15 @@ final class DeviceController: ObservableObject {
         }
     }
 
-    /// Records factory bindings for keys that aren't customised, so the UI can show what "reset" restores.
+    /// Records factory bindings: a key the keyboard doesn't list as customised is showing its default.
     private func rememberDefaults(customKeys: Set<UInt16>) {
+        self.customKeys = customKeys
         for layer in BindingLayer.allCases {
             var d = defaultBindings[layer] ?? [:]
-            for (k, b) in bindings[layer] ?? [:] where !customKeys.contains(UInt16(k.bindingIndex) + layer.keyOffset) {
-                d[k] = b
+            for (k, b) in bindings[layer] ?? [:] {
+                let raw = UInt16(k.bindingIndex) + layer.keyOffset
+                if !customKeys.contains(raw) { d[k] = b }
+                else if d[k] == b { d[k] = nil }   // a stored "default" equal to a customised value is stale
             }
             defaultBindings[layer] = d
         }
@@ -114,8 +120,15 @@ final class DeviceController: ObservableObject {
     }
 
     func isCustomised(_ k: KeyID, layer: BindingLayer) -> Bool {
-        guard let cur = bindings[layer]?[k], let def = defaultBindings[layer]?[k] else { return false }
-        return cur != def
+        customKeys.contains(UInt16(k.bindingIndex) + layer.keyOffset)
+    }
+
+    private func markCustom(_ k: KeyID, _ layer: BindingLayer, _ custom: Bool, fresh: KeyBinding? = nil) {
+        let raw = UInt16(k.bindingIndex) + layer.keyOffset
+        if custom { customKeys.insert(raw) } else {
+            customKeys.remove(raw)
+            if let f = fresh { defaultBindings[layer, default: [:]][k] = f; save(defaultBindings, "defaultBindings") }
+        }
     }
 
     /// Runs `work` on the device queue and reports errors.
@@ -171,6 +184,7 @@ final class DeviceController: ObservableObject {
     func setBinding(_ b: KeyBinding, for key: KeyID, layer: BindingLayer) {
         perform("Remap", { try $0.setBinding(b, for: key, layer: layer) }) {
             self.bindings[layer, default: [:]][key] = b
+            self.markCustom(key, layer, true)
             self.toast = "\(key.label.isEmpty ? key.rawValue : key.label) → \(self.describe(b))"
         }
     }
@@ -182,6 +196,7 @@ final class DeviceController: ObservableObject {
             fresh = try dev.binding(key, layer: layer)
         }) {
             if let f = fresh { self.bindings[layer, default: [:]][key] = f }
+            self.markCustom(key, layer, false, fresh: fresh)
             self.toast = "Reset \(key.rawValue)"
         }
     }
@@ -208,7 +223,64 @@ final class DeviceController: ObservableObject {
             }
         }) {
             for (k, b) in fresh { self.bindings[.base, default: [:]][k] = b }
+            self.refreshCustomKeys()
             self.toast = on ? "Mac layout on: Win is ⌥ Option, Alt is ⌘ Command" : "Windows layout restored"
+        }
+    }
+
+    // MARK: Language switch key
+
+    enum LanguageKey: String, CaseIterable, Identifiable {
+        case off = "Off", fn = "Fn key", rightCtrl = "Right Ctrl", capsLock = "Caps Lock"
+        var id: String { rawValue }
+    }
+
+    /// Which key (if any) currently sends ⌃Space, macOS's input-source shortcut.
+    var languageKey: LanguageKey {
+        let b = bindings[.base] ?? [:]
+        if b[.fn] == .languageSwitch { return .fn }
+        if b[.rightCtrl] == .languageSwitch { return .rightCtrl }
+        if b[.capsLock] == .languageSwitch { return .capsLock }
+        return .off
+    }
+
+    func setLanguageKey(_ choice: LanguageKey) {
+        let current = bindings[.base] ?? [:]
+        var fresh: [KeyID: KeyBinding] = [:]
+        perform("Language switch key", { dev in
+            // Undo whatever the previous choice changed.
+            for k in [KeyID.fn, .rightCtrl, .capsLock] {
+                let b = current[k]
+                if b == .languageSwitch || (k == .rightCtrl && b == .fnLayer) { try dev.resetBinding(k, layer: .base) }
+            }
+            switch choice {
+            case .off: break
+            case .fn:
+                // Keep the Fn layer reachable by moving it to Right Ctrl.
+                try dev.setBinding(.fnLayer, for: .rightCtrl, layer: .base)
+                try dev.setBinding(.languageSwitch, for: .fn, layer: .base)
+            case .rightCtrl: try dev.setBinding(.languageSwitch, for: .rightCtrl, layer: .base)
+            case .capsLock: try dev.setBinding(.languageSwitch, for: .capsLock, layer: .base)
+            }
+            for k in [KeyID.fn, .rightCtrl, .capsLock] { fresh[k] = try dev.binding(k, layer: .base) }
+        }) {
+            for (k, b) in fresh { self.bindings[.base, default: [:]][k] = b }
+            self.refreshCustomKeys()
+            switch choice {
+            case .off: self.toast = "Language switch key turned off"
+            case .fn: self.toast = "Fn switches language · Fn layer moved to Right Ctrl"
+            case .rightCtrl: self.toast = "Right Ctrl switches language"
+            case .capsLock: self.toast = "Caps Lock switches language"
+            }
+        }
+    }
+
+    func refreshCustomKeys() {
+        var keys: Set<UInt16>?
+        queue.async { [weak self] in
+            guard let self, let dev = self.device else { return }
+            keys = (try? dev.customBindings()).map { Set($0.map(\.0)) }
+            Task { @MainActor in if let k = keys { self.rememberDefaults(customKeys: k) } }
         }
     }
 
@@ -230,6 +302,7 @@ final class DeviceController: ObservableObject {
             all = [.base: try dev.allBindings(layer: .base), .fn: try dev.allBindings(layer: .fn)]
         }) {
             self.bindings = all
+            self.rememberDefaults(customKeys: [])
             self.toast = "All keys restored to factory defaults"
         }
     }
@@ -286,7 +359,7 @@ final class DeviceController: ObservableObject {
         perform("Reading keyboard", { dev in
             b = [.base: try dev.allBindings(layer: .base), .fn: try dev.allBindings(layer: .fn)]
             m = try dev.macros()
-        }) { self.bindings = b; self.macros = m }
+        }) { self.bindings = b; self.macros = m; self.refreshCustomKeys() }
     }
 
     // MARK: Persistence

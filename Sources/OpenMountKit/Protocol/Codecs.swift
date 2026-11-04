@@ -176,7 +176,12 @@ public enum KeyBinding: Equatable, Hashable, Codable, Sendable {
     case mouse(MouseButton)
     case lighting(LightingAction)
     case macro(UInt16)
+    /// Activates the Fn layer while held (the factory action of the Fn key).
+    case fnLayer
     case raw([UInt8])
+
+    /// ⌃Space: macOS's default "Select the previous input source" shortcut.
+    public static let languageSwitch = KeyBinding.key(modifiers: .leftCtrl, usage: 0x2C)
 
     public func encode() -> [UInt8] {
         switch self {
@@ -186,6 +191,7 @@ public enum KeyBinding: Equatable, Hashable, Codable, Sendable {
         case .mouse(let b): return [3, 1, b.rawValue, 0]
         case .lighting(let a): return [9, a.rawValue]
         case .macro(let id): return [10, UInt8(id & 0xFF), UInt8(id >> 8)]
+        case .fnLayer: return [0x1B]
         case .raw(let b): return b
         }
     }
@@ -199,6 +205,7 @@ public enum KeyBinding: Equatable, Hashable, Codable, Sendable {
         case 3 where b.count >= 3 && b[1] == 1: return MouseButton(rawValue: b[2]).map { .mouse($0) } ?? .raw(b)
         case 9 where b.count >= 2: return LightingAction(rawValue: b[1]).map { .lighting($0) } ?? .raw(b)
         case 10 where b.count >= 3: return .macro(UInt16(b[1]) | UInt16(b[2]) << 8)
+        case 0x1B: return .fnLayer
         default: return .raw(b)
         }
     }
@@ -206,6 +213,8 @@ public enum KeyBinding: Equatable, Hashable, Codable, Sendable {
     public var displayName: String {
         switch self {
         case .disabled: return "Disabled"
+        case .fnLayer: return "Fn layer"
+        case .key(let m, let u) where m == .leftCtrl && u == 0x2C: return "Switch language (⌃Space)"
         case .key(let m, let u):
             let name = HIDUsage.name(u)
             if u == 0 { return m.symbols.isEmpty ? "None" : m.symbols }

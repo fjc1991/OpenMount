@@ -20,8 +20,14 @@ itself, so it keeps working on any computer.
 - **Key remapping:** remap any key on the main layer or the Fn layer to another key or a
   shortcut, a media key, a mouse button, a lighting control or a macro. Keys can be captured by
   pressing them.
+- **Language switch key:** make Fn (or Right Ctrl or Caps Lock) switch input languages, for
+  example English ↔ Korean, without the app running. When Fn is used, the Fn layer moves to Right
+  Ctrl so nothing is lost.
 - **Mac modifier layout:** one switch swaps Win and Alt, so the keys next to the space bar are
   ⌘ Command and ⌥ Option, like on a Mac keyboard.
+- **Language layouts:** see Korean (or another language) on screen when your keycaps only
+  show English. It follows the macOS input source and can float above your other windows.
+  Layouts are community-made: [add yours](Layouts/README.md).
 - **Macros:** up to 10 on-keyboard macros. Record them from your keystrokes or generate them from
   text.
 - **Menu-bar quick controls:** effect, brightness and lights off.

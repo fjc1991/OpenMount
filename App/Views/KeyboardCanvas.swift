@@ -8,6 +8,9 @@ struct KeyboardCanvas: View {
     var fill: (KeyID) -> Color = { _ in Color(nsColor: .controlBackgroundColor) }
     var badge: (KeyID) -> String? = { _ in nil }
     var lightBar: [Color]? = nil
+    /// Optional second-language legend drawn large in the centre of the key.
+    var legend: (KeyID) -> LanguageLayout.Legend? = { _ in nil }
+    var showShift = false
 
     @State private var dragStart: CGPoint?
     @State private var dragRect: CGRect?
@@ -30,10 +33,11 @@ struct KeyboardCanvas: View {
                     let rect = CGRect(x: key.x * unit + 2, y: key.y * unit + 2 + yOff,
                                       width: key.width * unit - 4, height: key.height * unit - 4)
                     Button { toggle(key.id) } label: {
-                        KeyCapView(key: key, selected: selection.contains(key.id), fill: fill(key.id), badge: badge(key.id), unit: unit)
+                        KeyCapView(key: key, selected: selection.contains(key.id), fill: fill(key.id), badge: badge(key.id), unit: unit,
+                                   legend: legend(key.id), showShift: showShift)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(key.id.rawValue)
+                    .accessibilityLabel(legend(key.id).map { "\(key.id.rawValue), \($0.base)" } ?? key.id.rawValue)
                     .accessibilityValue(badge(key.id) ?? "")
                     .accessibilityAddTraits(selection.contains(key.id) ? .isSelected : [])
                     .frame(width: rect.width, height: rect.height)
@@ -83,17 +87,36 @@ struct KeyCapView: View {
     let fill: Color
     let badge: String?
     let unit: Double
+    var legend: LanguageLayout.Legend? = nil
+    var showShift = false
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: key.isRound ? unit : unit * 0.12, style: .continuous)
         ZStack(alignment: .topLeading) {
             shape.fill(fill)
             shape.strokeBorder(selected ? Color.accentColor : Color.primary.opacity(0.18), lineWidth: selected ? 2.5 : 1)
+            let ink = fill.isLight ? Color.black : Color.white
             Text(key.label)
-                .font(.system(size: max(8, unit * 0.22), weight: .medium))
+                .font(.system(size: max(8, unit * (legend == nil ? 0.22 : 0.17)), weight: .medium))
                 .lineLimit(1).minimumScaleFactor(0.5)
-                .foregroundStyle(fill.isLight ? Color.black.opacity(0.75) : Color.white.opacity(0.9))
+                .foregroundStyle(ink.opacity(legend == nil ? 0.9 : 0.45))
                 .padding(unit * 0.08)
+            if let legend {
+                let main = showShift ? (legend.shift ?? legend.base) : legend.base
+                Text(main)
+                    .font(.system(size: unit * 0.42, weight: .semibold))
+                    .lineLimit(1).minimumScaleFactor(0.4)
+                    .foregroundStyle(ink.opacity(0.95))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .offset(y: unit * 0.04)
+                if let shift = legend.shift, !showShift {
+                    Text(shift)
+                        .font(.system(size: unit * 0.2, weight: .medium))
+                        .foregroundStyle(Color.orange.opacity(0.9))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                        .padding(unit * 0.07)
+                }
+            }
             if let badge {
                 Text(badge)
                     .font(.system(size: max(7, unit * 0.17), weight: .semibold))

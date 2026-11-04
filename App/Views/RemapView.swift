@@ -2,7 +2,7 @@ import SwiftUI
 import OpenMountKit
 
 enum ActionKind: String, CaseIterable, Identifiable {
-    case key = "Key", media = "Media", mouse = "Mouse", lighting = "Lighting", macro = "Macro", disabled = "Disabled"
+    case key = "Key", media = "Media", mouse = "Mouse", lighting = "Lighting", macro = "Macro", special = "Special", disabled = "Disabled"
     var id: String { rawValue }
 }
 
@@ -25,6 +25,23 @@ struct RemapView: View {
                     .toggleStyle(.switch)
                     .help("Swaps Win and Alt so the keys next to the space bar are ⌘ Command, then ⌥ Option, like on a Mac keyboard.")
                 Button("Reset all keys…") { confirmReset = true }
+            }
+            HStack(spacing: 10) {
+                Image(systemName: "globe").foregroundStyle(.secondary)
+                Text("Language switch key")
+                Picker("Language switch key", selection: Binding(get: { device.languageKey }, set: { device.setLanguageKey($0) })) {
+                    ForEach(DeviceController.LanguageKey.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented).labelsHidden().frame(width: 380)
+                Spacer()
+            }
+            .help("Sends ⌃Space, which macOS uses to switch between input sources such as English and Korean.")
+            if device.languageKey == .fn {
+                Text("Fn now switches language (⌃Space). The Fn layer (Fn + arrows for lighting, Fn + Pause for game mode) has moved to Right Ctrl.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            } else if device.languageKey != .off {
+                Text("Sends ⌃Space. If it doesn't switch, check System Settings › Keyboard › Keyboard Shortcuts › Input Sources.")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
             if !device.macModifiersEnabled && !dismissedMacTip {
                 HStack {
@@ -65,12 +82,14 @@ struct RemapView: View {
     func short(_ b: KeyBinding?) -> String? {
         guard let b else { return nil }
         switch b {
+        case .key(let m, let u) where m == .leftCtrl && u == 0x2C: return "🌐"
         case .key(let m, let u): return m.symbols + (u == 0 ? "" : HIDUsage.name(u))
         case .media: return "♫"
         case .mouse: return "🖱"
         case .lighting: return "☀︎"
         case .macro(let id): return "M\(id)"
         case .disabled: return "✕"
+        case .fnLayer: return "Fn"
         case .raw: return "…"
         }
     }
@@ -88,6 +107,8 @@ struct BindingEditor: View {
     @State private var mouse: MouseButton = .left
     @State private var lightingAction: LightingAction = .nextEffect
     @State private var macroID: UInt16 = 1
+    @State private var special: SpecialAction = .language
+    enum SpecialAction { case language, fnLayer }
     @State private var capturing = false
     @State private var monitor: Any?
 
@@ -135,6 +156,12 @@ struct BindingEditor: View {
                 } else {
                     Picker("Macro", selection: $macroID) { ForEach(device.macros) { Text($0.name).tag($0.id) } }.frame(width: 300)
                 }
+            case .special:
+                Picker("Special action", selection: $special) {
+                    Text("Switch language (⌃Space)").tag(SpecialAction.language)
+                    Text("Fn layer").tag(SpecialAction.fnLayer)
+                }
+                .frame(width: 300)
             case .disabled:
                 Text("The key will do nothing.").foregroundStyle(.secondary)
             }
@@ -143,9 +170,9 @@ struct BindingEditor: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(kind == .macro && device.macros.isEmpty)
                 Button("Reset to default") { device.resetBinding(key, layer: layer) }
-                if key == .fn { Text("Fn can't be remapped.").foregroundStyle(.secondary) }
+                if key == .fn && layer == .fn { Text("Fn has no Fn-layer binding.").foregroundStyle(.secondary) }
             }
-            .disabled(key == .fn)
+            .disabled(key == .fn && layer == .fn)
         }
         .onAppear(perform: loadFromCurrent)
         .onChange(of: current) { loadFromCurrent() }
@@ -161,6 +188,7 @@ struct BindingEditor: View {
         case .mouse: return .mouse(mouse)
         case .lighting: return .lighting(lightingAction)
         case .macro: return .macro(macroID)
+        case .special: return special == .language ? .languageSwitch : .fnLayer
         case .disabled: return .disabled
         }
     }
@@ -172,6 +200,8 @@ struct BindingEditor: View {
     func loadFromCurrent() {
         macroID = device.macros.first?.id ?? 1
         switch current {
+        case .fnLayer?: kind = .special; special = .fnLayer
+        case let b? where b == .languageSwitch: kind = .special; special = .language
         case .key(let m, let u)?: kind = .key; mods = m; usage = u
         case .media(let a)?: kind = .media; media = a
         case .mouse(let b)?: kind = .mouse; mouse = b

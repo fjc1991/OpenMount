@@ -45,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 enum AppSection: String, CaseIterable, Identifiable {
-    case lighting = "Lighting", perKey = "Per-key colours", remap = "Key remapping", macros = "Macros", device = "Device"
+    case lighting = "Lighting", perKey = "Per-key colours", remap = "Key remapping", macros = "Macros", layouts = "Layouts", device = "Device"
     var id: String { rawValue }
     var icon: String {
         switch self {
@@ -53,6 +53,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .perKey: return "paintbrush.pointed"
         case .remap: return "keyboard"
         case .macros: return "record.circle"
+        case .layouts: return "globe"
         case .device: return "info.circle"
         }
     }
@@ -78,6 +79,7 @@ struct ContentView: View {
                     case .perKey: PerKeyView()
                     case .remap: RemapView()
                     case .macros: MacrosView()
+                    case .layouts: LayoutsView()
                     case .device: DeviceView()
                     }
                 case .searching:

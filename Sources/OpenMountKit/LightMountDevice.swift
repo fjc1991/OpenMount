@@ -88,7 +88,7 @@ public final class LightMountDevice: @unchecked Sendable {
         for _ in 0..<n {
             let key = try r.u16()
             let a = try r.u8()
-            let len: Int = [0: 0, 1: 2, 2: 1, 3: 3, 9: 1, 10: 2][Int(a)] ?? 0
+            let len: Int = [0: 0, 1: 2, 2: 1, 3: 3, 9: 1, 10: 2, 0x1B: 0][Int(a)] ?? 0
             out.append((key, KeyBinding.decode([a] + (try r.raw(len)))))
         }
         return out
@@ -96,7 +96,7 @@ public final class LightMountDevice: @unchecked Sendable {
 
     public func allBindings(layer: BindingLayer) throws -> [KeyID: KeyBinding] {
         var d: [KeyID: KeyBinding] = [:]
-        for k in KeyID.allCases where k != .fn { d[k] = try binding(k, layer: layer) }
+        for k in KeyID.allCases where !(k == .fn && layer == .fn) { d[k] = try binding(k, layer: layer) }
         return d
     }
 

@@ -1,0 +1,13 @@
+{
+  "id": "xx-name",
+  "name": "Language – Layout name (native name)",
+  "language": "xx",
+  "authors": ["your-github-username"],
+  "macInputSources": ["com.apple.keylayout.Example"],
+  "physicalLayout": "ANSI",
+  "keys": {
+    "Q": { "base": "q", "shift": "Q" },
+    "A": { "base": "a" },
+    "SemicolonAndColon": { "base": ";", "shift": ":" }
+  }
+}
