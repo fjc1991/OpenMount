@@ -62,6 +62,7 @@ enum AppSection: String, CaseIterable, Identifiable {
 struct ContentView: View {
     @EnvironmentObject var device: DeviceController
     @State private var section: AppSection? = .lighting
+    @StateObject private var installer = InstallAssistant()
 
     var body: some View {
         NavigationSplitView {
@@ -95,6 +96,13 @@ struct ContentView: View {
             .navigationTitle(section?.rawValue ?? "OpenMount")
         }
         .overlay(alignment: .bottom) { ToastView() }
+        .onAppear { installer.evaluate() }
+        .sheet(item: $installer.step) { step in
+            switch step {
+            case .move: MoveToApplicationsView(assistant: installer)
+            case .welcome: WelcomeView(assistant: installer).environmentObject(device)
+            }
+        }
         .alert("Something went wrong", isPresented: Binding(get: { device.lastError != nil }, set: { if !$0 { device.lastError = nil } })) {
             Button("OK") { device.lastError = nil }
         } message: { Text(device.lastError ?? "") }
