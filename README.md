@@ -49,10 +49,14 @@ If you own one of the untested models, please open an issue with the output of `
 
 ## Install
 
-1. Download `OpenMount-vX.Y.Z.dmg` from [Releases](../../releases) and open it.
-2. Drag **OpenMount** onto the **Applications** shortcut. (A `.zip` is also attached if you prefer.)
-3. The app isn't notarised yet, so the first time you open it, right-click it, choose **Open**,
-   then **Open** again. Or run `xattr -dr com.apple.quarantine /Applications/OpenMount.app`.
+1. Download **`OpenMount-vX.Y.Z.dmg`** from [Releases](../../releases) and open it.
+2. Drag **OpenMount** onto **Applications**.
+3. **The first time, macOS will block it.** That's expected for free apps without a paid Apple
+   developer account. Click **Done** (not *Move to Trash*), then go to **System Settings ›
+   Privacy & Security** and click **Open Anyway**.
+
+👉 **[Illustrated step-by-step install guide](docs/INSTALL.md).** The same guide is included in the
+DMG as *How to open OpenMount*.
 
 It needs macOS 14 Sonoma or later and runs on Apple silicon and Intel. No drivers are needed, and
 there's no Input Monitoring prompt: OpenMount only uses the keyboard's configuration interface.

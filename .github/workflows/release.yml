@@ -20,4 +20,5 @@ jobs:
           files: |
             dist/OpenMount-*.dmg
             dist/OpenMount-*.zip
+          body_path: .github/release-body.md
           generate_release_notes: true
