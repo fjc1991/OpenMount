@@ -19,6 +19,9 @@ struct OpenMountApp: App {
         .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { Task { await Updater.shared.check(userInitiated: true) } }
+            }
             CommandGroup(replacing: .help) {
                 Button("OpenMount Help") { NSWorkspace.shared.open(URL(string: "https://github.com/fjc1991/OpenMount#readme")!) }
                 Button("Report a Problem…") { NSWorkspace.shared.open(URL(string: "https://github.com/fjc1991/OpenMount/issues/new/choose")!) }
@@ -63,6 +66,7 @@ struct ContentView: View {
     @EnvironmentObject var device: DeviceController
     @State private var section: AppSection? = .lighting
     @StateObject private var installer = InstallAssistant()
+    @ObservedObject private var updater = Updater.shared
 
     var body: some View {
         NavigationSplitView {
@@ -70,7 +74,9 @@ struct ContentView: View {
                 Label(s.rawValue, systemImage: s.icon).tag(s)
             }
             .navigationSplitViewColumnWidth(min: 190, ideal: 210)
-            .safeAreaInset(edge: .bottom) { ConnectionBadge().padding(12) }
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 8) { UpdateBadge(); ConnectionBadge() }.padding(12)
+            }
         } detail: {
             Group {
                 switch device.state {
@@ -93,10 +99,11 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .bottom) { TipNudge().padding(.horizontal, 20) }
+            .sheet(isPresented: $updater.showSheet) { UpdateSheet() }
             .navigationTitle(section?.rawValue ?? "OpenMount")
         }
         .overlay(alignment: .bottom) { ToastView() }
-        .onAppear { installer.evaluate() }
+        .onAppear { installer.evaluate(); Updater.shared.checkOnLaunch() }
         .sheet(item: $installer.step) { step in
             switch step {
             case .move: MoveToApplicationsView(assistant: installer)

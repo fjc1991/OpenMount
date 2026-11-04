@@ -189,6 +189,9 @@ struct DeviceView: View {
                 Text("Saves lighting, per-key colours, key bindings and macros to a JSON file.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
+            Section("Updates") {
+                UpdateSettings()
+            }
             Section("About") {
                 Text("OpenMount is an unofficial, open-source configurator. It isn't affiliated with or endorsed by be quiet!. It never updates firmware.")
                     .font(.footnote)

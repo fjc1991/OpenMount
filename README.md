@@ -30,6 +30,9 @@ itself, so it keeps working on any computer.
   Layouts are community-made: [add yours](Layouts/README.md).
 - **Macros:** up to 10 on-keyboard macros. Record them from your keystrokes or generate them from
   text.
+- **Updates in one click:** OpenMount checks GitHub for new versions. **Update now** downloads the
+  new version, checks it against GitHub's published checksum, installs it and relaunches. No new
+  Gatekeeper prompt.
 - **Menu-bar quick controls:** effect, brightness and lights off.
 - **Backup / restore:** export your settings to JSON and import them again.
 - **`omctl` command-line tool:** for scripting and debugging.

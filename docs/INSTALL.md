@@ -56,5 +56,6 @@ OpenMount only:
 xattr -dr com.apple.quarantine /Applications/OpenMount.app
 ```
 
-**After an update:** a new version is a new download, so repeat steps 2–4. Your keyboard settings
-are stored on the keyboard and aren't affected.
+**Updates:** OpenMount tells you when a new version is out. Click **Update now** and it updates
+itself, with no need to repeat these steps. Your keyboard settings are stored on the keyboard and
+aren't affected.

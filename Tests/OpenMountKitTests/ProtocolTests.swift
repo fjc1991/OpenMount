@@ -121,4 +121,13 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(KeyID.fromHIDUsage(0x04), .a)
         XCTAssertEqual(KeyID.fromHIDUsage(0xE3), .leftGui)
     }
+
+    func testVersionComparison() {
+        XCTAssertTrue(Versioning.isNewer("0.2.1", than: "0.2.0"))
+        XCTAssertTrue(Versioning.isNewer("v0.10.0", than: "0.9.9"))
+        XCTAssertTrue(Versioning.isNewer("1.0", than: "0.99.99"))
+        XCTAssertFalse(Versioning.isNewer("0.2.0", than: "0.2.0"))
+        XCTAssertFalse(Versioning.isNewer("0.2", than: "0.2.0"))
+        XCTAssertFalse(Versioning.isNewer("0.1.9", than: "0.2.0"))
+    }
 }
