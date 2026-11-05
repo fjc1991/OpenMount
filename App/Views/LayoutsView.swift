@@ -17,8 +17,6 @@ final class LayoutReference: ObservableObject {
     @Published private(set) var pressed: Set<KeyID> = []
     @Published private(set) var shiftDown = false
 
-    private var localMonitor: Any?
-    private var globalMonitor: Any?
     private var panel: NSPanel?
 
     var selected: LanguageLayout? { layouts.first { $0.id == selectedID } }
@@ -62,43 +60,115 @@ final class LayoutReference: ObservableObject {
 
     // MARK: Key highlighting
 
-    private func handle(_ e: NSEvent) {
-        shiftDown = e.modifierFlags.contains(.shift)
-        guard let usage = HIDUsage.fromMacKeyCode(e.keyCode), let key = KeyID.fromHIDUsage(usage) else { return }
-        switch e.type {
+    /// Physical key for each HID usage the keyboard sends, accounting for remaps (e.g. with the Mac
+    /// layout the physical Alt key sends ⌘, so a ⌘ press must light the Alt key).
+    private var physicalForUsage: [UInt8: KeyID] = [:]
+
+    func updatePhysicalMap(_ base: [KeyID: KeyBinding]) {
+        var m: [UInt8: KeyID] = [:]
+        for (key, b) in base {
+            guard case .key(let mods, let usage) = b else { continue }
+            if usage != 0 && mods.isEmpty { m[usage] = key }
+            else if usage == 0, mods.rawValue.nonzeroBitCount == 1 {
+                m[0xE0 + UInt8(mods.rawValue.trailingZeroBitCount)] = key
+            }
+        }
+        physicalForUsage = m
+    }
+
+    private func physicalKey(_ usage: UInt8) -> KeyID? { physicalForUsage[usage] ?? KeyID.fromHIDUsage(usage) }
+
+    /// Device-dependent modifier bits in CGEventFlags, by macOS key code.
+    private static let modifierBits: [UInt16: UInt64] = [
+        59: 0x01, 62: 0x2000,   // left / right control
+        56: 0x02, 60: 0x04,     // left / right shift
+        58: 0x20, 61: 0x40,     // left / right option
+        55: 0x08, 54: 0x10,     // left / right command
+    ]
+
+    fileprivate func handle(type: CGEventType, keyCode: UInt16, flags: UInt64) {
+        shiftDown = flags & CGEventFlags.maskShift.rawValue != 0
+        // Re-derive every modifier from the flags so nothing can get stuck.
+        for (code, bit) in Self.modifierBits {
+            guard let u = HIDUsage.fromMacKeyCode(code), let k = physicalKey(u) else { continue }
+            if flags & bit != 0 { pressed.insert(k) } else { pressed.remove(k) }
+        }
+        guard let usage = HIDUsage.fromMacKeyCode(keyCode), let key = physicalKey(usage) else { return }
+        switch type {
         case .keyDown: pressed.insert(key)
         case .keyUp: pressed.remove(key)
-        case .flagsChanged:
-            if HIDUsage.modifierBit(usage) != nil {
-                if pressed.contains(key) { pressed.remove(key) } else { pressed.insert(key) }
-            }
+        case .flagsChanged where keyCode == 57:   // Caps Lock only reports a toggle: flash it
+            pressed.insert(key)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { self.pressed.remove(key) }
         default: break
         }
     }
 
-    var accessibilityTrusted: Bool { AXIsProcessTrusted() }
+    /// Input Monitoring lets OpenMount see key presses in other apps (listen-only; nothing is recorded).
+    var listenAllowed: Bool { CGPreflightListenEventAccess() }
+
+    func requestListenAccess() {
+        if !CGRequestListenEventAccess() {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")!)
+        }
+        updateMonitors()
+        objectWillChange.send()
+    }
+
+    private var localMonitor: Any?
+    fileprivate static var tap: CFMachPort?
+    private var tapSource: CFRunLoopSource?
+
+    /// Highlighting is wanted when the user opted in, or whenever the floating window is open.
+    private var wantsGlobal: Bool { highlightEverywhere || floatingVisible }
 
     func updateMonitors() {
         if localMonitor == nil {
             localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp, .flagsChanged]) { [weak self] e in
-                self?.handle(e); return e
+                // Only needed when the tap isn't running (no permission yet).
+                if Self.tap == nil {
+                    let t: CGEventType = e.type == .keyDown ? .keyDown : e.type == .keyUp ? .keyUp : .flagsChanged
+                    self?.handle(type: t, keyCode: e.keyCode, flags: UInt64(e.modifierFlags.rawValue))
+                }
+                return e
             }
         }
-        if let g = globalMonitor { NSEvent.removeMonitor(g); globalMonitor = nil }
-        guard highlightEverywhere else { return }
-        if !AXIsProcessTrusted() {
-            let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            _ = AXIsProcessTrustedWithOptions(opts)
+        if wantsGlobal && listenAllowed { startTap() } else if !wantsGlobal { stopTap() }
+    }
+
+    private func startTap() {
+        guard Self.tap == nil else { return }
+        let mask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
+        let callback: CGEventTapCallBack = { _, type, event, _ in
+            if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                if let t = LayoutReference.tap { CGEvent.tapEnable(tap: t, enable: true) }
+                return Unmanaged.passUnretained(event)
+            }
+            let code = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
+            let flags = event.flags.rawValue
+            DispatchQueue.main.async { LayoutReference.shared.handle(type: type, keyCode: code, flags: flags) }
+            return Unmanaged.passUnretained(event)
         }
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .keyUp, .flagsChanged]) { [weak self] e in
-            Task { @MainActor in self?.handle(e) }
-        }
+        guard let t = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .tailAppendEventTap, options: .listenOnly,
+                                        eventsOfInterest: CGEventMask(mask), callback: callback, userInfo: nil) else { return }
+        let src = CFMachPortCreateRunLoopSource(nil, t, 0)
+        CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)
+        CGEvent.tapEnable(tap: t, enable: true)
+        Self.tap = t
+        tapSource = src
+    }
+
+    private func stopTap() {
+        if let t = Self.tap { CGEvent.tapEnable(tap: t, enable: false) }
+        if let s = tapSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), s, .commonModes) }
+        Self.tap = nil; tapSource = nil
+        pressed.removeAll()
     }
 
     // MARK: Floating window
 
     func toggleFloatingWindow(layout: PhysicalLayout) {
-        if let p = panel, p.isVisible { p.close(); return }
+        if let p = panel, p.isVisible { p.close(); updateMonitors(); objectWillChange.send(); return }
         let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 860, height: 300),
                         styleMask: [.titled, .closable, .resizable, .utilityWindow, .nonactivatingPanel],
                         backing: .buffered, defer: false)
@@ -108,10 +178,28 @@ final class LayoutReference: ObservableObject {
         p.isReleasedWhenClosed = false
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         p.contentView = NSHostingView(rootView: FloatingLayoutView(physical: layout).environmentObject(self))
+        let kb = KeyboardLayout.lightMount(layout)
+        // Keep the keyboard's proportions when the window edge is dragged (header ≈ 52 pt, padding 40 pt).
+        p.contentAspectRatio = NSSize(width: kb.width * 40 + 40, height: kb.height * 40 + 52 + 40)
+        p.contentMinSize = NSSize(width: 420, height: 170)
         p.setFrameAutosaveName("OpenMount.LayoutReference")
         if !p.setFrameUsingName("OpenMount.LayoutReference") { p.center() }
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: p, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.updateMonitors(); self?.objectWillChange.send() }
+        }
         p.orderFrontRegardless()
         panel = p
+        updateMonitors()
+    }
+
+    /// Grows or shrinks the floating window in steps, keeping its top-left corner in place.
+    func resizePanel(by factor: CGFloat) {
+        guard let p = panel else { return }
+        let content = p.contentRect(forFrameRect: p.frame)
+        let ratio = content.height / content.width
+        let w = min(max(content.width * factor, 420), (p.screen?.visibleFrame.width ?? 3000) - 40)
+        let newContent = NSRect(x: content.minX, y: content.maxY - w * ratio, width: w, height: w * ratio)
+        p.setFrame(p.frameRect(forContentRect: newContent), display: true, animate: true)
     }
 
     var floatingVisible: Bool { panel?.isVisible ?? false }
@@ -125,7 +213,7 @@ struct LayoutKeyboard: View {
     var body: some View {
         let layout = KeyboardLayout.lightMount(ref.selected?.physicalLayout ?? physical)
         KeyboardCanvas(layout: layout, selection: .constant([]),
-                       fill: { k in ref.pressed.contains(k) ? Color.accentColor : Color(white: 0.16) },
+                       fill: { k in ref.pressed.contains(k) ? Color.orange : Color(white: 0.16) },
                        legend: { k in ref.selected?.legend(for: k) },
                        showShift: ref.shiftDown)
             .allowsHitTesting(false)
@@ -164,13 +252,10 @@ struct LayoutsView: View {
 
                 HStack(alignment: .top, spacing: 16) {
                     Card(title: "Highlight keys as I type") {
-                        Text("Keys light up while you type in this window. To see them while you type in other apps too, OpenMount needs Accessibility permission. It only uses this to light up the keys on screen and never records or stores what you type.")
+                        Text("Keys light up as you press them. To see this while you type in other apps (for example with the floating window open), macOS needs to let OpenMount notice key presses. It only uses this to light up keys on screen, and never records or stores what you type.")
                             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                        Toggle("Also highlight while typing in other apps", isOn: $ref.highlightEverywhere)
-                        if ref.highlightEverywhere && !ref.accessibilityTrusted {
-                            Text("Allow OpenMount in System Settings › Privacy & Security › Accessibility, then turn this off and on again.")
-                                .font(.footnote).foregroundStyle(.orange)
-                        }
+                        Toggle("Highlight while typing in other apps", isOn: $ref.highlightEverywhere)
+                        ListenPermissionRow()
                     }
                     Card(title: "Add your language") {
                         Text("Layouts are community-made. Each one is a small JSON file you can submit with a pull request on GitHub.")
@@ -198,17 +283,59 @@ struct FloatingLayoutView: View {
     let physical: PhysicalLayout
     var body: some View {
         VStack(spacing: 6) {
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "globe")
                 Text(ref.selected?.name ?? "English").font(.callout.weight(.medium))
+                if ref.shiftDown { Text("⇧ Shift").font(.caption).foregroundStyle(.orange) }
                 Spacer()
-                if ref.shiftDown { Text("⇧ Shift").font(.caption).foregroundStyle(.secondary) }
+                ControlGroup {
+                    Button { ref.resizePanel(by: 1 / 1.2) } label: { Image(systemName: "minus.magnifyingglass") }
+                        .help("Smaller")
+                    Button { ref.resizePanel(by: 1.2) } label: { Image(systemName: "plus.magnifyingglass") }
+                        .help("Larger")
+                }
+                .controlSize(.small)
+                .fixedSize()
             }
             .padding(.horizontal, 6)
+            if !ref.listenAllowed { ListenPermissionRow(compact: true).padding(.horizontal, 6) }
             LayoutKeyboard(physical: physical)
         }
         .padding(10)
-        .frame(minWidth: 520, minHeight: 200)
+        .frame(minWidth: 400, minHeight: 150)
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+}
+
+/// Explains and requests the Input Monitoring permission used to light up keys typed in other apps.
+struct ListenPermissionRow: View {
+    @ObservedObject var ref = LayoutReference.shared
+    var compact = false
+    @State private var tick = 0
+    let timer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        Group {
+            if ref.listenAllowed {
+                if !compact {
+                    Label("Allowed in Input Monitoring", systemImage: "checkmark.circle.fill")
+                        .font(.footnote).foregroundStyle(.green)
+                }
+            } else {
+                HStack(spacing: 8) {
+                    Image(systemName: "keyboard.badge.eye").foregroundStyle(.orange)
+                    Text(compact ? "Allow OpenMount to light up keys as you type in other apps."
+                                 : "Not allowed yet. Click Allow, then turn on OpenMount under Privacy & Security › Input Monitoring.")
+                        .font(.footnote).fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 4)
+                    Button("Allow…") { ref.requestListenAccess() }.controlSize(.small)
+                }
+            }
+        }
+        .id(tick)
+        .onReceive(timer) { _ in
+            // Permission changes in System Settings don't notify apps; re-check while visible.
+            if !ref.listenAllowed { tick += 1 } else if tick >= 0 { tick = -1; ref.updateMonitors() }
+        }
     }
 }

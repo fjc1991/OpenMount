@@ -28,7 +28,8 @@ itself, so it keeps working on any computer.
 - **Mac modifier layout:** one switch swaps Win and Alt, so the keys next to the space bar are
   ⌘ Command and ⌥ Option, like on a Mac keyboard.
 - **Language layouts:** see Korean (or another language) on screen when your keycaps only
-  show English. It follows the macOS input source and can float above your other windows.
+  show English. It follows the macOS input source and can float above your other windows, at the
+  size you choose. Keys light up as you type (needs the Input Monitoring permission).
   Layouts are community-made: [add yours](Layouts/README.md).
 - **Macros:** up to 10 on-keyboard macros. Record them from your keystrokes or generate them from
   text.

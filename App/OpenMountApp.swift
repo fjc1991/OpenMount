@@ -104,6 +104,7 @@ struct ContentView: View {
         }
         .overlay(alignment: .bottom) { ToastView() }
         .onAppear { installer.evaluate(); Updater.shared.checkOnLaunch() }
+        .onReceive(device.$bindings) { LayoutReference.shared.updatePhysicalMap($0[.base] ?? [:]) }
         .sheet(item: $installer.step) { step in
             switch step {
             case .move: MoveToApplicationsView(assistant: installer)
